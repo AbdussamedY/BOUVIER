@@ -182,11 +182,11 @@ def vMI_function(AllData, analyse_path, save = False,s=35,alpha=0.6, show=True, 
                     if posOrientation == 'ML_pos':
                         plt.gca().invert_xaxis()
 
-                    plt.colorbar(label=f"{direction} modulation index")
-
                     plt.xlabel(f"{pos_title} position (mm)", fontsize=14)
                     plt.ylabel("Depth (µm)", fontsize=14)
                     plt.title(f"{direction} modulation of units in {pos_title} axis", fontsize=16)
+
+                plt.colorbar(label=f"{direction} modulation index")
 
                 if save:
                     direction_modulation_folder = os.path.join(analyse_path, 'Direction_modulation')
@@ -230,11 +230,11 @@ def dirMI_function(AllData, analyse_path, save = False,s=35,alpha=0.6, show=True
                 if posOrientation == 'ML_pos':
                     plt.gca().invert_xaxis()
 
-                plt.colorbar(label=f"Direction Modulation Index\n(CW - CCW) / (CW + CCW)")
-
                 plt.xlabel(f"{pos_title} position (mm)", fontsize=14)
                 plt.ylabel("Depth (µm)", fontsize=14)
                 plt.title(f"CW vs CCW preference in {pos_title} axis", fontsize=16)
+
+            plt.colorbar(label=r"Direction Modulation Index : $\frac{CW - CCW}{CW + CCW}$")
 
 
                 
@@ -380,18 +380,21 @@ def scatter3D(x,y,z,colors,colorlabel,xlabel,ylabel,zlabel,title,filename,filepa
 
         plt.title(title)
 
-    if anim:
-        def update(frame):
-            ax.view_init(30, frame)
-            return scatter,
+        if anim:
+            def update(frame):
+                ax.view_init(30, frame)
+                return scatter,
 
-        ani = FuncAnimation(fig, update, frames=np.arange(0, 360, 2), interval=100)
+            ani = FuncAnimation(fig, update, frames=np.arange(0, 360, 2), interval=100)
 
-        if save:
+        if save & anim:
             os.makedirs(filepath, exist_ok=True)
             ani.save(os.path.join(filepath, filename), writer='pillow')
-    if show:
-        plt.show()
+        elif save:
+            os.makedirs(filepath, exist_ok=True)
+            plt.savefig(os.path.join(filepath, filename), format='pdf')
+        if show:
+            plt.show()
 
 
 
