@@ -161,8 +161,17 @@ def MultiAnimal_function(selected_folders, analyse_path, analysis_script):
 
 # vMI FUNCTION
 
-def vMI_function(AllData, analyse_path, save = False,s=35,alpha=0.6, show=True, scale=0.008):
-    for pos_title, posOrientation in zip(['Mediolateral', 'Anteroposterior'], ['ML_pos', 'AP_pos']):
+def vMI_function(AllData, analyse_path, save = False,s=35,alpha=0.6, show=True, scale=0.008, ML=True, AP=True):
+    foo=[]
+    foo2=[]
+
+    if ML:
+        foo.append('Mediolateral')
+        foo2.append('ML_pos')
+    if AP:
+        foo.append('Anteroposterior')
+        foo2.append('AP_pos')
+    for pos_title, posOrientation in zip(foo, foo2):
         for condition in ['second']:
             for direction in ['CW','CCW']:
 
@@ -210,8 +219,17 @@ def vMI_function(AllData, analyse_path, save = False,s=35,alpha=0.6, show=True, 
 
 # dirMI FUNCTION
 
-def dirMI_function(AllData, analyse_path, save = False,s=35,alpha=0.6, show=True, scale=0.008):
-    for pos_title, posOrientation in zip(['Mediolateral', 'Anteroposterior'], ['ML_pos', 'AP_pos']):
+def dirMI_function(AllData, analyse_path, save = False,s=35,alpha=0.6, show=True, scale=0.008, AP=True, ML=True):
+    foo=[]
+    foo2=[]
+
+    if ML:
+        foo.append('Mediolateral')
+        foo2.append('ML_pos')
+    if AP:
+        foo.append('Anteroposterior')
+        foo2.append('AP_pos')
+    for pos_title, posOrientation in zip(foo, foo2):
         for condition in ['second']:
 
             with load_theme("arctic_light"):
@@ -408,4 +426,38 @@ def scatter3D(x,y,z,colors,colorlabel,xlabel,ylabel,zlabel,title,filename,filepa
 
 
 
-        
+def getPSTH(Zscore, SEM, edges, ax='', xlabel='', ylabel='', title=''):
+    if ax:
+        ax.plot(edges[:-1], Zscore)
+        ax.fill_between(edges[:-1], Zscore-SEM, Zscore+SEM, alpha=0.5)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+    else:
+        with load_theme("arctic_light"):
+            plt.plot(edges[:-1], Zscore)
+            plt.fill_between(edges[:-1], Zscore-SEM, Zscore+SEM, alpha=0.5)
+            plt.xlabel(xlabel)
+            plt.ylabel(ylabel)
+            plt.title(title)
+
+        plt.show()
+
+def PSTH(StudiedSpikeTimes, timeBef=1, timeAft=5, binResolution=0.03, xlabel='', ylabel='', title='', ax=''):
+    local_trial_number = len(StudiedSpikeTimes)
+
+    spike_number_per_trial = [[] for _ in range(local_trial_number)]
+    edges = []
+    unitary_firing_rate = [[] for _ in range(local_trial_number)]
+
+    for trial in range(local_trial_number):
+        spike_number_per_trial[trial], edges = np.histogram(StudiedSpikeTimes[trial], bins=np.arange(-timeBef, timeAft + binResolution, binResolution))
+
+    frequency_per_trial = [[spike_number_per_trial[trial][bin]/binResolution for bin in range(len(edges)-1)] for trial in range(local_trial_number)]
+    mean_frequency = [np.mean([frequency_per_trial[trial][bin] for trial in range(local_trial_number)]) for bin in range(len(edges)-1)]
+
+    Zscore = (mean_frequency - np.mean(mean_frequency)) / np.std(mean_frequency) if np.std(mean_frequency) != 0 else np.zeros(len(mean_frequency))
+    Zunitary = (frequency_per_trial - np.mean(mean_frequency)) / np.std(mean_frequency) if np.std(mean_frequency) != 0 else np.zeros(len(frequency_per_trial))
+    SEM = np.std(Zunitary)/np.sqrt(len(Zunitary)) if np.std(mean_frequency) != 0 else np.zeros(len(mean_frequency))
+
+    getPSTH(Zscore, SEM, edges, xlabel=xlabel, ylabel=ylabel, title=title, ax=ax)
