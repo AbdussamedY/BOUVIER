@@ -32,6 +32,10 @@ from PIL import Image
 
 from aquarel import load_theme
 
+from operator import itemgetter
+
+from prettytable import PrettyTable 
+
 
 # qt for popup window (savable as pdf, svg...), inline for inline plot, notebook for interactive plot, widget for interactive plot
 #%matplotlib widget 
@@ -161,51 +165,213 @@ def MultiAnimal_function(selected_folders, analyse_path, analysis_script):
 
 # vMI FUNCTION
 
-def vMI_function(AllData, analyse_path, save = False,s=35,alpha=0.6, show=True, scale=0.008, ML=True, AP=True):
-    foo=[]
-    foo2=[]
+def vMI_function(AllData, analyse_path, filename='', save=False, show=True, s=100,alpha=0.6, scale=0.008, ML=True, AP=True, CW=True, CCW=True, stats=False, hist=False, interest=None):
+    stereotaxic_title=[]
+    stereotaxic_label=[]
+    direction_selected=[]
 
     if ML:
-        foo.append('Mediolateral')
-        foo2.append('ML_pos')
+        stereotaxic_title.append('Mediolateral')
+        stereotaxic_label.append('ML_pos')
     if AP:
-        foo.append('Anteroposterior')
-        foo2.append('AP_pos')
-    for pos_title, posOrientation in zip(foo, foo2):
+        stereotaxic_title.append('Anteroposterior')
+        stereotaxic_label.append('AP_pos')
+    if CW:
+        direction_selected.append('CW')
+    if CCW:
+        direction_selected.append('CCW')
+
+
+    for pos_title, posOrientation in zip(stereotaxic_title, stereotaxic_label):
         for condition in ['second']:
-            for direction in ['CW','CCW']:
+            for direction in direction_selected:
+
+                NtotClust = np.sum([AllData[animal]['SUA_data']['Nclust'] for animal in AllData])
+                AllDepth = np.concatenate([AllData[animal]['MUA_data']['AllDepth'] for animal in AllData])
+                vMI = np.concatenate([AllData[animal]['Statistics_data']['vMI'][condition][direction] for animal in AllData])
+                pos = [AllData[animal]['informative_data'][posOrientation] for animal in AllData]
+                position = np.concatenate([np.random.normal(loc=pos[i], scale=scale, size=(AllData[animal]['SUA_data']['Nclust'], 1)) for animal, i in zip(AllData, range(len(pos)))])
+                SigniBool = np.concatenate([[np.isin(unit, AllData[animal]['Statistics_data']['significance'][condition][direction]) for unit in range(AllData[animal]['SUA_data']['Nclust'])] for animal in AllData])
+
+
+                maximum_value = max([max(AllData[animal]['Statistics_data']['vMI'][condition][direction]) for animal in AllData])
+                minimum_value = min([min(AllData[animal]['Statistics_data']['vMI'][condition][direction]) for animal in AllData])
+                nul_value = min([min(AllData[animal]['Statistics_data']['vMI'][condition][direction], key=lambda x: abs(x)) for animal in AllData])
+
 
                 with load_theme("arctic_light"):
-                    plt.figure(figsize=(17, 5))
+                    fig = plt.figure(figsize=(17, 9))
 
-                    for animal in AllData:
-                        pos = AllData[animal]['informative_data'][posOrientation]
-                        Nclust = AllData[animal]['SUA_data']['Nclust']
-                        AllDepth = AllData[animal]['MUA_data']['AllDepth']
-                        vMI = AllData[animal]['Statistics_data']['vMI']
+                    # mettre en évidence les neurones d'intérêt
+                    if interest!=None:
+                        wanted_array = []
+                        for value in interest:
+                            if value == 'max':
+                                wanted_array.append(maximum_value)
+                            elif value == 'min':
+                                wanted_array.append(minimum_value)
+                            elif value == 'nul':
+                                wanted_array.append(nul_value)
+                            else:
+                                wanted_array.append(value)
 
-                        plt.scatter(np.random.normal(loc=pos, scale=scale, size=(Nclust, 1)), AllDepth, c=vMI[condition][direction], cmap='coolwarm', s=s, alpha=alpha)
-                        # plt.scatter(np.random.normal(loc=pos, scale=1, size=(Nclust, 1)), AllDepth, c=vMI[condition][direction], cmap='coolwarm', s=s, alpha=alpha)
+                        
 
-                    plt.gca().invert_yaxis()
-                    if posOrientation == 'ML_pos':
-                        plt.gca().invert_xaxis()
 
-                    plt.xlabel(f"{pos_title} position (mm)", fontsize=14)
-                    plt.ylabel("Depth (µm)", fontsize=14)
-                    plt.title(f"{direction} modulation of units in {pos_title} axis", fontsize=16)
+                    if hist:
+                        gs = GridSpec(nrows=4, ncols=4)
+                        ax1 = fig.add_subplot(gs[1:4,0:3]) ; # scatter plot on the left
+                        ax2 = fig.add_subplot(gs[1:4,3], sharey=ax1) ; ax2.set_xlabel('Density') # histogram on the right
+                        ax3 = fig.add_subplot(gs[0,0:3], sharex=ax1) ; ax3.set_ylabel('Density') # histogram on the top
+                        # ax4 = fig.add_subplot(gs[0,3]) ; ax4.set_axis_off()# for legend
+                        
 
-                plt.colorbar(label=f"{direction} modulation index")
+                        ax2.spines['top'].set_visible(False) ; ax3.spines['top'].set_visible(False)
+                        ax2.spines['right'].set_visible(False) ; ax3.spines['right'].set_visible(False)
+                        ax2.spines['bottom'].set_visible(True) ; ax3.spines['bottom'].set_visible(False)
+                        ax2.spines['left'].set_visible(False) ; ax3.spines['left'].set_visible(True)
+                        ax2.tick_params(axis='both', which='both', bottom=True, top=False, left=False, right=False, labelleft=False, labelbottom=True)
+                        ax3.tick_params(axis='both', which='both', bottom=False, top=False, left=True, right=False, labelleft=True, labelbottom=False)
 
+                        if not stats:
+                            histdata, bins = np.histogram(position, bins=30)
+                            histdataDist = histdata / NtotClust
+                            ax3.plot(bins[:-1], histdataDist, color='c')
+
+                            histdata, bins = np.histogram(AllDepth, bins=30)
+                            histdataDist = histdata / NtotClust
+                            ax2.plot(histdataDist, bins[:-1], color='c')
+
+                            ax1.scatter(position, AllDepth, s=s, alpha=alpha, color='c')
+
+                        ax=ax1
+                    else:
+                        ax=plt
+
+
+                    # mettre en évidence les neurones d'intérêt
+                    if interest!=None:
+                        for value in wanted_array:
+                            ax = ax1 if hist else plt
+                            if type(value) == list:
+                                values_of_interest = [vMI_value for vMI_value in vMI if value[0] <= vMI_value <= value[1]]
+                                for value in values_of_interest:
+                                    unit_index = np.where(vMI == value)[0]
+                                    ax.scatter(position[unit_index], AllDepth[unit_index], marker='s', s=s*4, edgecolors='black', facecolors='none', linewidths=2) if len(unit_index) > 0 else None
+                            else:
+                                unit_index = np.where(vMI == value)[0]
+                                if len(unit_index) > 0:
+                                    ax.scatter(position[unit_index], AllDepth[unit_index], marker='s', s=s*4, edgecolors='black', facecolors='none', linewidths=2)
+
+
+
+
+                    if stats:
+                        if not hist:
+                            gs = GridSpec(nrows=4, ncols=4)
+                            ax1 = fig.add_subplot(gs[1:4,0:3]) ; # scatter plot on the left
+                            ax2 = fig.add_subplot(gs[1:4,3], sharey=ax1) ; ax2.set_xlabel('Density') # histogram on the right
+                            ax3 = fig.add_subplot(gs[0,0:3], sharex=ax1) ; ax3.set_ylabel('Density') # histogram on the top
+                            # ax4 = fig.add_subplot(gs[0,3]) ; ax4.set_axis_off()# for legend
+                            
+
+                            ax2.spines['top'].set_visible(False) ; ax3.spines['top'].set_visible(False)
+                            ax2.spines['right'].set_visible(False) ; ax3.spines['right'].set_visible(False)
+                            ax2.spines['bottom'].set_visible(True) ; ax3.spines['bottom'].set_visible(False)
+                            ax2.spines['left'].set_visible(False) ; ax3.spines['left'].set_visible(True)
+                            ax2.tick_params(axis='both', which='both', bottom=True, top=False, left=False, right=False, labelleft=False, labelbottom=True)
+                            ax3.tick_params(axis='both', which='both', bottom=False, top=False, left=True, right=False, labelleft=True, labelbottom=False)
+                        
+                        AllHow = np.concatenate([[AllData[animal]['Statistics_data']['modulation']['second'][unit]['type'] for unit in range(AllData[animal]['SUA_data']['Nclust'])] for animal in AllData])
+                        AllWho = np.concatenate([[AllData[animal]['Statistics_data']['modulation']['second'][unit]['selectivity'] for unit in range(AllData[animal]['SUA_data']['Nclust'])] for animal in AllData])
+
+                        condition_positive = []
+                        condition_negative = []
+                        condition_unmodulated = []
+
+                        if direction == 'CW':
+                            for i in range(NtotClust):
+                                condition_positive.append((AllWho[i] == 'CW' or AllWho[i] == 'both') and (AllHow[i] == '+' or AllHow[i] == '+/+' or AllHow[i] == '+/-'))
+                                condition_negative.append((AllWho[i] == 'CW' or AllWho[i] == 'both') and (AllHow[i] == '-' or AllHow[i] == '-/+' or AllHow[i] == '-/-'))
+                                condition_unmodulated.append(AllWho[i] == 'unmodulated' or AllWho[i] == 'CCW')
+                        elif direction == 'CCW':
+                            for i in range(NtotClust):
+                                condition_positive.append((AllWho[i] == 'CCW' or AllWho[i] == 'both') and (AllHow[i] == '+' or AllHow[i] == '+/+' or AllHow[i] == '-/+'))
+                                condition_negative.append((AllWho[i] == 'CCW' or AllWho[i] == 'both') and (AllHow[i] == '-' or AllHow[i] == '+/-' or AllHow[i] == '-/-'))
+                                condition_unmodulated.append(AllWho[i] == 'unmodulated' or AllWho[i] == 'CW')
+
+
+                        positionSigni_P = [position[i] for i in range(NtotClust) if condition_positive[i]]
+                        depthSigni_P = [AllDepth[i] for i in range(NtotClust) if condition_positive[i]]
+                        vMISigni_P = [vMI[i] for i in range(NtotClust) if condition_positive[i]]
+
+                        positionSigni_N = [position[i] for i in range(NtotClust) if condition_negative[i]]
+                        depthSigni_N = [AllDepth[i] for i in range(NtotClust) if condition_negative[i]]
+                        vMISigni_N = [vMI[i] for i in range(NtotClust) if condition_negative[i]]
+
+                        positionNot = [position[i] for i in range(NtotClust) if condition_unmodulated[i]]
+                        depthNot = [AllDepth[i] for i in range(NtotClust) if condition_unmodulated[i]]
+                        vMINot = [vMI[i] for i in range(NtotClust) if condition_unmodulated[i]]
+                        
+
+                        histdata1, bins1 = np.histogram(positionSigni_P, bins=30)
+                        histdataDist1 = histdata1 / NtotClust
+                        histdata2, bins2 = np.histogram(positionSigni_N, bins=30)
+                        histdataDist2 = histdata2 / NtotClust
+                        ax3.plot(bins1[:-1], histdataDist1, color='red')
+                        ax3.plot(bins2[:-1], histdataDist2, color='blue')
+
+                        histdata1, bins1 = np.histogram(depthSigni_P, bins=30)
+                        histdataDist1 = histdata1 / NtotClust
+                        histdata2, bins2 = np.histogram(depthSigni_N, bins=30)
+                        histdataDist2 = histdata2 / NtotClust
+                        ax2.plot(histdataDist1, bins1[:-1], color='red')
+                        ax2.plot(histdataDist2, bins2[:-1], color='blue')
+
+
+                        ax.scatter(positionSigni_P, depthSigni_P, s=s, alpha=alpha, color='red', label='Significant positive modulation')
+                        ax.scatter(positionSigni_N, depthSigni_N, s=s, alpha=alpha, color='blue', label='Significant negative modulation')
+                        ax.scatter(positionNot, depthNot, s=s, alpha=alpha/3, color='grey', label='Non-significant modulation')
+                        ax.legend()
+                        
+                    if not hist and not stats:
+                        plt.scatter(position, AllDepth, c=vMI, cmap='coolwarm', s=s, alpha=alpha, clim=(minimum_value, maximum_value))
+                
+                plt.colorbar(label=f"{direction} modulation index"+r" : $\frac{n_{during} - n_{before}}{n_{during} + n_{before}}$") if ((not hist) and (not stats)) else None
+
+                plt.gca().invert_yaxis() if not hist else ax1.invert_yaxis()
+                (plt.gca().invert_xaxis() if posOrientation == 'ML_pos' else None) if not hist else (ax1.invert_xaxis() if posOrientation == 'ML_pos' else None)
+
+                xlabel = f"{pos_title} position (mm)" ; plt.xlabel(xlabel, fontsize=14) if not hist else ax1.set_xlabel(xlabel)
+                ylabel = r"Depth ($\mu$m)" ; plt.ylabel(ylabel, fontsize=14) if not hist else ax1.set_ylabel(ylabel)
+                plt.suptitle(f"{direction} modulation of units in {pos_title} axis", fontsize=16)
+                
                 if save:
                     direction_modulation_folder = os.path.join(analyse_path, 'Direction_modulation')
                     os.makedirs(direction_modulation_folder, exist_ok=True)
-                    plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}.png"))
-                if show:
-                    plt.show()
-                else:
-                    plt.close()
-                print('\n')
+                    if hist:
+                        plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}_hist.png")) if filename=='' else plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}_{filename}.png"))
+                    else:
+                        plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}.png")) if filename=='' else plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}_{filename}.png"))
+
+
+                plt.show() if show else plt.close()
+
+                foo=dict()
+                for animal in AllData:
+                    foo[animal] = AllData[animal]['informative_data'][posOrientation]
+                sorted_keys = [key for key, value in sorted(foo.items(), key=itemgetter(1))] 
+
+                myTable = PrettyTable(["Animal", pos_title]) 
+
+                for animal in sorted_keys:
+                    myTable.add_row([animal, foo[animal]])
+
+                print(myTable)
+        
+
+
+
 
 
 
@@ -374,7 +540,7 @@ def select_folders(selected_path):
 
 
 
-def scatter3D(x,y,z,colors,colorlabel,xlabel,ylabel,zlabel,title,filename,filepath,save=True,show=True,anim=True):
+def scatter3D(x,y,z,colors,colorlabel,xlabel,ylabel,zlabel,title,filename,filepath,save=True,show=True,anim=True,s=35,alpha=1):
 
     theme = load_theme("arctic_light").set_overrides({
         "ytick.minor.visible": False,
@@ -385,7 +551,7 @@ def scatter3D(x,y,z,colors,colorlabel,xlabel,ylabel,zlabel,title,filename,filepa
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
 
-        scatter = ax.scatter(x, y, z, c=colors, cmap='coolwarm', marker='o')
+        scatter = ax.scatter(x, y, z, c=colors, cmap='coolwarm', marker='o', s=s, alpha=alpha)
 
         cbar = plt.colorbar(scatter, pad=0.2)
         cbar.set_label(colorlabel)
@@ -461,3 +627,428 @@ def PSTH(StudiedSpikeTimes, timeBef=1, timeAft=5, binResolution=0.03, xlabel='',
     SEM = np.std(Zunitary)/np.sqrt(len(Zunitary)) if np.std(mean_frequency) != 0 else np.zeros(len(mean_frequency))
 
     getPSTH(Zscore, SEM, edges, xlabel=xlabel, ylabel=ylabel, title=title, ax=ax)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# def vMI_function(AllData, analyse_path, save = False,s=100,alpha=0.6, show=True, scale=0.008, ML=True, AP=True, CW=True, CCW=True, seuil_min=None, seuil_max=None, outcolor='green', outshow=True, outscoeff=0.1, incolor=None, colormap=True, interest=None, hist=False):
+#     stereotaxic_title=[]
+#     stereotaxic_label=[]
+#     direction_selected=[]
+
+#     if hist:
+#         outscoeff = 1
+#         if seuil_min!=None:
+#             outcolor='blue'
+#             incolor='red'
+#         elif seuil_max!=None:
+#             outcolor='red'
+#             incolor='blue'
+
+
+#     if ML:
+#         stereotaxic_title.append('Mediolateral')
+#         stereotaxic_label.append('ML_pos')
+
+#     if AP:
+#         stereotaxic_title.append('Anteroposterior')
+#         stereotaxic_label.append('AP_pos')
+
+#     if CW:
+#         direction_selected.append('CW')
+
+#     if CCW:
+#         direction_selected.append('CCW')
+
+
+
+#     for pos_title, posOrientation in zip(stereotaxic_title, stereotaxic_label):
+#         for condition in ['second']:
+#             for direction in direction_selected:
+#                 AllPositionHist = []
+#                 AllBooleanHist = [] if seuil_min!=None or seuil_max!=None else None
+#                 with load_theme("arctic_light"):
+#                     fig = plt.figure(figsize=(17, 9))
+#                     plt.rcParams['figure.constrained_layout.use'] = False
+#                     if hist:
+#                         gs = GridSpec(nrows=4, ncols=4)
+#                         ax1 = fig.add_subplot(gs[1:4,0:3]) # scatter plot on the left
+#                         ax2 = fig.add_subplot(gs[1:4,3]) # histogram on the right
+#                         ax3 = fig.add_subplot(gs[0,0:3]) # histogram on the top
+#                         ax4 = fig.add_subplot(gs[0,3]) # for legend
+
+#                     for animal in AllData:
+#                         Nclust = AllData[animal]['SUA_data']['Nclust']
+#                         AllDepth = AllData[animal]['MUA_data']['AllDepth']
+#                         vMI = AllData[animal]['Statistics_data']['vMI'][condition][direction]
+#                         pos = AllData[animal]['informative_data'][posOrientation]
+#                         position = np.random.normal(loc=pos, scale=scale, size=(Nclust, 1))
+#                         AllPositionHist.extend(position)
+                       
+#                         maximum_value = max([max(AllData[animal]['Statistics_data']['vMI'][condition][direction]) for animal in AllData])
+#                         minimum_value = min([min(AllData[animal]['Statistics_data']['vMI'][condition][direction]) for animal in AllData])
+#                         nul_value = min([min(AllData[animal]['Statistics_data']['vMI'][condition][direction], key=lambda x: abs(x)) for animal in AllData])
+
+
+#                         # mettre en évidence les neurones d'intérêt
+#                         if interest!=None:
+#                             wanted_array = []
+#                             for value in interest:
+#                                 if value == 'max':
+#                                     wanted_array.append(maximum_value)
+#                                 elif value == 'min':
+#                                     wanted_array.append(minimum_value)
+#                                 elif value == 'nul':
+#                                     wanted_array.append(nul_value)
+#                                 else:
+#                                     wanted_array.append(value)
+
+#                             for value in wanted_array:
+#                                 ax = ax1 if hist else plt
+#                                 if type(value) == list:
+#                                     values_of_interest = [vMI_value for vMI_value in vMI if value[0] <= vMI_value <= value[1]]
+#                                     for value in values_of_interest:
+#                                         unit_index = np.where(vMI == value)[0]
+#                                         if len(unit_index) > 0:
+#                                             ax.scatter(position[unit_index], AllDepth[unit_index], marker='s', s=s*4, edgecolors='black', facecolors='none', linewidths=2)
+#                                 else:
+#                                     unit_index = np.where(vMI == value)[0]
+#                                     if len(unit_index) > 0:
+#                                         ax.scatter(position[unit_index], AllDepth[unit_index], marker='s', s=s*4, edgecolors='black', facecolors='none', linewidths=2)
+
+
+#                         # Scatter des neurones en fonction de leur position
+#                         ax = ax1 if hist else plt
+#                         if seuil_min!=None or seuil_max!=None:
+#                             seuil_pos = np.where(np.array(vMI)>=seuil_min)[0] if seuil_min!=None else np.where(np.array(vMI)<seuil_max)[0]
+#                             not_seuil_pos = np.where(np.array(vMI)<seuil_min)[0] if seuil_min!=None else np.where(np.array(vMI)>=seuil_max)[0]
+
+#                             AllBooleanHist.extend([i in seuil_pos for i in range(len(vMI))])
+
+#                             if outshow:
+#                                 ax.scatter([position[i] for i in not_seuil_pos], [AllDepth[i] for i in not_seuil_pos], color=outcolor, s=s, alpha=alpha*outscoeff)
+                            
+#                             if incolor==None:
+#                                 ax.scatter([position[i] for i in seuil_pos], [AllDepth[i] for i in seuil_pos], c=[vMI[i] for i in seuil_pos], cmap='coolwarm', s=s, alpha=alpha, clim=(minimum_value, maximum_value))
+#                             else:
+#                                 ax.scatter([position[i] for i in seuil_pos], [AllDepth[i] for i in seuil_pos], s=s, alpha=alpha, color=incolor)
+#                         else:
+#                             ax.scatter(position, AllDepth, c=vMI, cmap='coolwarm', s=s, alpha=alpha, clim=(minimum_value, maximum_value))
+
+                    
+#                     if hist:
+#                         AllDepthHist = np.concatenate([AllData[animal]['MUA_data']['AllDepth'] for animal in AllData])
+#                         NtotClust = np.sum([AllData[animal]['SUA_data']['Nclust'] for animal in AllData])
+
+#                         if seuil_min!=None or seuil_max!=None:
+#                             histdata1, bins1 = np.histogram([v for v, b in zip(AllDepthHist, AllBooleanHist) if b], bins=50)
+#                             histdataDist1 = histdata1 / NtotClust
+#                             histdata2, bins2 = np.histogram([v for v, b in zip(AllDepthHist, AllBooleanHist) if not b], bins=50)
+#                             histdataDist2 = histdata2 / NtotClust
+#                             ax2.plot(histdataDist1, bins1[:-1], color=incolor if incolor!=None else 'green')
+#                             ax2.plot(histdataDist2, bins2[:-1], color=outcolor if outcolor!=None else 'green')
+
+#                             histdata1, bins1 = np.histogram([v for v, b in zip(AllPositionHist, AllBooleanHist) if b], bins=50)
+#                             histdataDist1 = histdata1 / NtotClust
+#                             histdata2, bins2 = np.histogram([v for v, b in zip(AllPositionHist, AllBooleanHist) if not b], bins=50)
+#                             histdataDist2 = histdata2 / NtotClust
+#                             ax3.plot(bins1[:-1], histdataDist1, color=incolor if incolor!=None else 'green')
+#                             ax3.plot(bins2[:-1], histdataDist2, color=outcolor if outcolor!=None else 'green')
+#                         else:
+#                             histdata, bins = np.histogram(AllDepthHist, bins=50)
+#                             histdataDist = histdata / NtotClust
+#                             ax2.plot(histdataDist, bins[:-1])
+#                             histdata, bins = np.histogram(AllPositionHist, bins=100)
+#                             histdataDist = histdata / NtotClust
+#                             ax3.plot(bins[:-1], histdataDist)
+                        
+
+
+                    
+
+
+
+
+
+
+#                         if seuil_min!=None or seuil_max!=None:
+#                             ax4.plot([0, 0.5], [0, 0], color=incolor, linewidth=1)
+#                             seuil = seuil_min if seuil_min!=None else seuil_max
+#                             ax4.text(0.6, 0, fr'$vMI>${seuil}', ha='left', va='center', fontsize=12, color='k')
+#                             ax4.plot([0, 0.5], [-0.5, -0.5], color=outcolor, linewidth=1)
+#                             ax4.text(0.6, -0.5, fr'$vMI<${seuil}', ha='left', va='center', fontsize=12, color='k')
+#                             ax4.set_xlim(-1,3)
+#                             ax4.set_ylim(-2,2)
+#                         ax4.set_axis_off()
+
+#                         for ax in [ax2, ax3]:
+#                             ax.spines['top'].set_visible(False)
+#                             ax.spines['right'].set_visible(False)
+#                             ax.spines['bottom'].set_visible(False)
+#                             ax.spines['left'].set_visible(False)
+#                         ax2.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelleft=False, labelbottom=True)
+#                         ax3.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelleft=True, labelbottom=False)
+                    
+#                         ax1.invert_yaxis()
+#                         ax2.invert_yaxis()
+#                         ax3.invert_xaxis() if posOrientation == 'ML_pos' else None
+#                         ax1.invert_xaxis() if posOrientation == 'ML_pos' else None
+
+#                         ax1.set_xlabel(f"{pos_title} position (mm)", fontsize=14)
+#                         ax1.set_ylabel("Depth (µm)", fontsize=14)
+
+#                         ax2.set_xlabel("Density", fontsize=14)
+#                         ax3.set_ylabel("Density", fontsize=14)
+
+#                         fig.suptitle(f"{direction} modulation of units in {pos_title} axis", fontsize=16)
+
+#                     else:
+#                         plt.gca().invert_yaxis()
+#                         plt.gca().invert_xaxis() if posOrientation == 'ML_pos' else None
+
+#                         plt.xlabel(f"{pos_title} position (mm)", fontsize=14)
+#                         plt.ylabel("Depth (µm)", fontsize=14)
+#                         plt.title(f"{direction} modulation of units in {pos_title} axis", fontsize=16)
+
+#                 # if incolor==None:
+#                 #     ax = ax1 if hist else plt
+#                 #     try:
+#                 #         ax.colorbar(label=f"{direction} modulation index"+r" : $\frac{n_{during} - n_{before}}{n_{during} + n_{before}}$")
+#                 #     except:
+#                 #         print('Colorbar with histogram ? Pourquoi faire ?')
+
+#                 if not hist:
+#                     plt.colorbar(label=f"{direction} modulation index"+r" : $\frac{n_{during} - n_{before}}{n_{during} + n_{before}}$")
+                
+
+#                 if save:
+#                     direction_modulation_folder = os.path.join(analyse_path, 'Direction_modulation')
+#                     os.makedirs(direction_modulation_folder, exist_ok=True)
+#                     if hist:
+#                         plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}_hist.png"))
+#                     else:
+#                         plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}.png"))
+#                 if show:
+#                     plt.show()
+#                 else:
+#                     plt.close()
+                
+#                 foo=dict()
+#                 for animal in AllData:
+#                     foo[animal] = AllData[animal]['informative_data'][posOrientation]
+#                 sorted_keys = [key for key, value in sorted(foo.items(), key=itemgetter(1))] 
+ 
+#                 myTable = PrettyTable(["Animal", pos_title]) 
+
+#                 for animal in sorted_keys:
+#                     myTable.add_row([animal, foo[animal]])
+
+#                 print(myTable)
+
+#     # if interest!=None:
+#     #     MyTable = PrettyTable(["Wanted vMI", "Value"])
+
+#     #     for vMI_of_interest_element, wanted_array_element in zip(interest, wanted_array):
+#     #         MyTable.add_row([vMI_of_interest_element, wanted_array_element])
+#     #     print(MyTable)
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# def vMI_function(AllData, analyse_path, save = False,s=35,alpha=0.6, show=True, scale=0.008, ML=True, AP=True, CW=True, CCW=True, seuil=None):
+#     foo=[]
+#     foo2=[]
+#     foo3=[]
+
+#     if ML:
+#         foo.append('Mediolateral')
+#         foo2.append('ML_pos')
+#     if AP:
+#         foo.append('Anteroposterior')
+#         foo2.append('AP_pos')
+#     if CW:
+#         foo3.append('CW')
+#     if CCW:
+#         foo3.append('CCW')
+#     for pos_title, posOrientation in zip(foo, foo2):
+#         for condition in ['second']:
+#             for direction in foo3:
+
+#                 with load_theme("arctic_light"):
+#                     plt.figure(figsize=(17, 5))
+
+#                     for animal in AllData:
+#                         Nclust = AllData[animal]['SUA_data']['Nclust']
+#                         AllDepth = AllData[animal]['MUA_data']['AllDepth']
+#                         vMI = AllData[animal]['Statistics_data']['vMI']
+#                         pos = AllData[animal]['informative_data'][posOrientation]
+#                         position = np.random.normal(loc=pos, scale=scale, size=(Nclust, 1))
+                        
+#                         if seuil:
+#                             seuil_pos = np.where(np.array(vMI)>=seuil)[0]
+#                             not_seuil_pos = np.where(np.array(vMI)<seuil)[0]
+#                             plt.scatter([position[i] for i in seuil_pos], [AllDepth[i] for i in seuil_pos], c=[vMI[condition][direction][i] for i in seuil_pos], cmap='coolwarm', s=s, alpha=alpha)
+#                             plt.scatter([position[i] for i in not_seuil_pos], [AllDepth[i] for i in not_seuil_pos], color='gray', s=s, alpha=alpha)
+#                         else:
+#                             plt.scatter(position, AllDepth, c=vMI[condition][direction], cmap='coolwarm', s=s, alpha=alpha)
+#                         # plt.scatter(np.random.normal(loc=pos, scale=1, size=(Nclust, 1)), AllDepth, c=vMI[condition][direction], cmap='coolwarm', s=s, alpha=alpha)
+
+#                     plt.gca().invert_yaxis()
+#                     if posOrientation == 'ML_pos':
+#                         plt.gca().invert_xaxis()
+
+#                     plt.xlabel(f"{pos_title} position (mm)", fontsize=14)
+#                     plt.ylabel("Depth (µm)", fontsize=14)
+#                     plt.title(f"{direction} modulation of units in {pos_title} axis", fontsize=16)
+
+#                 plt.colorbar(label=f"{direction} modulation index")
+
+#                 if save:
+#                     direction_modulation_folder = os.path.join(analyse_path, 'Direction_modulation')
+#                     os.makedirs(direction_modulation_folder, exist_ok=True)
+#                     plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}.png"))
+#                 if show:
+#                     plt.show()
+#                 else:
+#                     plt.close()
+#                 print('\n')
