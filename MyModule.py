@@ -165,7 +165,7 @@ def MultiAnimal_function(selected_folders, analyse_path, analysis_script):
 
 # vMI FUNCTION
 
-def vMI_function(AllData, analyse_path, filename='', save=False, show=True, s=100,alpha=0.6, scale=0.008, ML=True, AP=True, CW=True, CCW=True, stats=False, hist=False, interest=None):
+def vMI_function(AllData, filename='', path='', save=False, show=True, s=100,alpha=0.6, scale=0.008, ML=True, AP=True, CW=True, CCW=True, stats=False, hist=False, interest=None, color='c', binsNumber=30):
     stereotaxic_title=[]
     stereotaxic_label=[]
     direction_selected=[]
@@ -191,7 +191,6 @@ def vMI_function(AllData, analyse_path, filename='', save=False, show=True, s=10
                 vMI = np.concatenate([AllData[animal]['Statistics_data']['vMI'][condition][direction] for animal in AllData])
                 pos = [AllData[animal]['informative_data'][posOrientation] for animal in AllData]
                 position = np.concatenate([np.random.normal(loc=pos[i], scale=scale, size=(AllData[animal]['SUA_data']['Nclust'], 1)) for animal, i in zip(AllData, range(len(pos)))])
-                SigniBool = np.concatenate([[np.isin(unit, AllData[animal]['Statistics_data']['significance'][condition][direction]) for unit in range(AllData[animal]['SUA_data']['Nclust'])] for animal in AllData])
 
 
                 maximum_value = max([max(AllData[animal]['Statistics_data']['vMI'][condition][direction]) for animal in AllData])
@@ -199,33 +198,105 @@ def vMI_function(AllData, analyse_path, filename='', save=False, show=True, s=10
                 nul_value = min([min(AllData[animal]['Statistics_data']['vMI'][condition][direction], key=lambda x: abs(x)) for animal in AllData])
 
 
-                with load_theme("arctic_light"):
-                    fig = plt.figure(figsize=(17, 9))
+                fig = plt.figure(figsize=(17, 9))
 
-                    # mettre en évidence les neurones d'intérêt
-                    if interest!=None:
-                        wanted_array = []
-                        for value in interest:
-                            if value == 'max':
-                                wanted_array.append(maximum_value)
-                            elif value == 'min':
-                                wanted_array.append(minimum_value)
-                            elif value == 'nul':
-                                wanted_array.append(nul_value)
-                            else:
-                                wanted_array.append(value)
+                # mettre en évidence les neurones d'intérêt
+                if interest!=None:
+                    wanted_array = []
+                    for value in interest:
+                        if value == 'max':
+                            wanted_array.append(maximum_value)
+                        elif value == 'min':
+                            wanted_array.append(minimum_value)
+                        elif value == 'nul':
+                            wanted_array.append(nul_value)
+                        else:
+                            wanted_array.append(value)
 
-                        
+                    
 
 
+                if hist:
+                    gs = GridSpec(nrows=4, ncols=4)
+                    ax1 = fig.add_subplot(gs[1:4,0:3]) ; # scatter plot on the left
+                    ax2 = fig.add_subplot(gs[1:4,3], sharey=ax1) ; ax2.set_xlabel('Density') # histogram on the right
+                    ax3 = fig.add_subplot(gs[0,0:3], sharex=ax1) ; ax3.set_ylabel('Density') # histogram on the top
+                    ax4 = fig.add_subplot(gs[0,3]) if stats else None
+                    
+
+                    ax2.spines['top'].set_visible(False) ; ax3.spines['top'].set_visible(False)
+                    ax2.spines['right'].set_visible(False) ; ax3.spines['right'].set_visible(False)
+                    ax2.spines['bottom'].set_visible(True) ; ax3.spines['bottom'].set_visible(False)
+                    ax2.spines['left'].set_visible(False) ; ax3.spines['left'].set_visible(True)
+                    ax2.tick_params(axis='both', which='both', bottom=True, top=False, left=False, right=False, labelleft=False, labelbottom=True)
+                    ax3.tick_params(axis='both', which='both', bottom=False, top=False, left=True, right=False, labelleft=True, labelbottom=False)
+
+                    if not stats:
+                        histdata, bins = np.histogram(position, bins=binsNumber)
+                        histdataDist = histdata / NtotClust
+                        ax3.plot(bins[:-1], histdataDist, color=color)
+
+                        histdata, bins = np.histogram(AllDepth, bins=binsNumber)
+                        histdataDist = histdata / NtotClust
+                        ax2.plot(histdataDist, bins[:-1], color=color)
+
+                        ax1.scatter(position, AllDepth, s=s, alpha=alpha, color=color)
+
+                    # ax=ax1
+                # else:
+                    # ax=plt
+
+
+                # mettre en évidence les neurones d'intérêt
+                if interest!=None:
+                    for value in wanted_array:
+                        ax = ax1 if hist else plt
+                        if type(value) == list:
+                            values_of_interest = [vMI_value for vMI_value in vMI if value[0] <= vMI_value <= value[1]]
+                            for value in values_of_interest:
+                                unit_index = np.where(vMI == value)[0]
+                                ax.scatter(position[unit_index], AllDepth[unit_index], marker='s', s=s*4, edgecolors='black', facecolors='none', linewidths=2) if len(unit_index) > 0 else None
+                        else:
+                            unit_index = np.where(vMI == value)[0]
+                            if len(unit_index) > 0:
+                                ax.scatter(position[unit_index], AllDepth[unit_index], marker='s', s=s*4, edgecolors='black', facecolors='none', linewidths=2)
+
+
+
+
+                if stats:                     
+                    AllHow = np.concatenate([[AllData[animal]['Statistics_data']['modulation']['second'][unit]['type'] for unit in range(AllData[animal]['SUA_data']['Nclust'])] for animal in AllData])
+                    AllWho = np.concatenate([[AllData[animal]['Statistics_data']['modulation']['second'][unit]['selectivity'] for unit in range(AllData[animal]['SUA_data']['Nclust'])] for animal in AllData])
+
+                    condition_positive = []
+                    condition_negative = []
+                    condition_unmodulated = []
+
+                    if direction == 'CW':
+                        for i in range(NtotClust):
+                            condition_positive.append((AllWho[i] == 'CW' or AllWho[i] == 'both') and (AllHow[i] == '+' or AllHow[i] == '+/+' or AllHow[i] == '+/-'))
+                            condition_negative.append((AllWho[i] == 'CW' or AllWho[i] == 'both') and (AllHow[i] == '-' or AllHow[i] == '-/+' or AllHow[i] == '-/-'))
+                            condition_unmodulated.append(AllWho[i] == 'unmodulated' or AllWho[i] == 'CCW')
+                    elif direction == 'CCW':
+                        for i in range(NtotClust):
+                            condition_positive.append((AllWho[i] == 'CCW' or AllWho[i] == 'both') and (AllHow[i] == '+' or AllHow[i] == '+/+' or AllHow[i] == '-/+'))
+                            condition_negative.append((AllWho[i] == 'CCW' or AllWho[i] == 'both') and (AllHow[i] == '-' or AllHow[i] == '+/-' or AllHow[i] == '-/-'))
+                            condition_unmodulated.append(AllWho[i] == 'unmodulated' or AllWho[i] == 'CW')
+
+
+                    positionSigni_P = [position[i] for i in range(NtotClust) if condition_positive[i]]
+                    depthSigni_P = [AllDepth[i] for i in range(NtotClust) if condition_positive[i]]
+                    vMISigni_P = [vMI[i] for i in range(NtotClust) if condition_positive[i]]
+
+                    positionSigni_N = [position[i] for i in range(NtotClust) if condition_negative[i]]
+                    depthSigni_N = [AllDepth[i] for i in range(NtotClust) if condition_negative[i]]
+                    vMISigni_N = [vMI[i] for i in range(NtotClust) if condition_negative[i]]
+
+                    positionNot = [position[i] for i in range(NtotClust) if condition_unmodulated[i]]
+                    depthNot = [AllDepth[i] for i in range(NtotClust) if condition_unmodulated[i]]
+                    vMINot = [vMI[i] for i in range(NtotClust) if condition_unmodulated[i]]
+                    
                     if hist:
-                        gs = GridSpec(nrows=4, ncols=4)
-                        ax1 = fig.add_subplot(gs[1:4,0:3]) ; # scatter plot on the left
-                        ax2 = fig.add_subplot(gs[1:4,3], sharey=ax1) ; ax2.set_xlabel('Density') # histogram on the right
-                        ax3 = fig.add_subplot(gs[0,0:3], sharex=ax1) ; ax3.set_ylabel('Density') # histogram on the top
-                        # ax4 = fig.add_subplot(gs[0,3]) ; ax4.set_axis_off()# for legend
-                        
-
                         ax2.spines['top'].set_visible(False) ; ax3.spines['top'].set_visible(False)
                         ax2.spines['right'].set_visible(False) ; ax3.spines['right'].set_visible(False)
                         ax2.spines['bottom'].set_visible(True) ; ax3.spines['bottom'].set_visible(False)
@@ -233,109 +304,35 @@ def vMI_function(AllData, analyse_path, filename='', save=False, show=True, s=10
                         ax2.tick_params(axis='both', which='both', bottom=True, top=False, left=False, right=False, labelleft=False, labelbottom=True)
                         ax3.tick_params(axis='both', which='both', bottom=False, top=False, left=True, right=False, labelleft=True, labelbottom=False)
 
-                        if not stats:
-                            histdata, bins = np.histogram(position, bins=30)
-                            histdataDist = histdata / NtotClust
-                            ax3.plot(bins[:-1], histdataDist, color='c')
-
-                            histdata, bins = np.histogram(AllDepth, bins=30)
-                            histdataDist = histdata / NtotClust
-                            ax2.plot(histdataDist, bins[:-1], color='c')
-
-                            ax1.scatter(position, AllDepth, s=s, alpha=alpha, color='c')
-
-                        ax=ax1
-                    else:
-                        ax=plt
-
-
-                    # mettre en évidence les neurones d'intérêt
-                    if interest!=None:
-                        for value in wanted_array:
-                            ax = ax1 if hist else plt
-                            if type(value) == list:
-                                values_of_interest = [vMI_value for vMI_value in vMI if value[0] <= vMI_value <= value[1]]
-                                for value in values_of_interest:
-                                    unit_index = np.where(vMI == value)[0]
-                                    ax.scatter(position[unit_index], AllDepth[unit_index], marker='s', s=s*4, edgecolors='black', facecolors='none', linewidths=2) if len(unit_index) > 0 else None
-                            else:
-                                unit_index = np.where(vMI == value)[0]
-                                if len(unit_index) > 0:
-                                    ax.scatter(position[unit_index], AllDepth[unit_index], marker='s', s=s*4, edgecolors='black', facecolors='none', linewidths=2)
-
-
-
-
-                    if stats:
-                        if not hist:
-                            gs = GridSpec(nrows=4, ncols=4)
-                            ax1 = fig.add_subplot(gs[1:4,0:3]) ; # scatter plot on the left
-                            ax2 = fig.add_subplot(gs[1:4,3], sharey=ax1) ; ax2.set_xlabel('Density') # histogram on the right
-                            ax3 = fig.add_subplot(gs[0,0:3], sharex=ax1) ; ax3.set_ylabel('Density') # histogram on the top
-                            # ax4 = fig.add_subplot(gs[0,3]) ; ax4.set_axis_off()# for legend
-                            
-
-                            ax2.spines['top'].set_visible(False) ; ax3.spines['top'].set_visible(False)
-                            ax2.spines['right'].set_visible(False) ; ax3.spines['right'].set_visible(False)
-                            ax2.spines['bottom'].set_visible(True) ; ax3.spines['bottom'].set_visible(False)
-                            ax2.spines['left'].set_visible(False) ; ax3.spines['left'].set_visible(True)
-                            ax2.tick_params(axis='both', which='both', bottom=True, top=False, left=False, right=False, labelleft=False, labelbottom=True)
-                            ax3.tick_params(axis='both', which='both', bottom=False, top=False, left=True, right=False, labelleft=True, labelbottom=False)
-                        
-                        AllHow = np.concatenate([[AllData[animal]['Statistics_data']['modulation']['second'][unit]['type'] for unit in range(AllData[animal]['SUA_data']['Nclust'])] for animal in AllData])
-                        AllWho = np.concatenate([[AllData[animal]['Statistics_data']['modulation']['second'][unit]['selectivity'] for unit in range(AllData[animal]['SUA_data']['Nclust'])] for animal in AllData])
-
-                        condition_positive = []
-                        condition_negative = []
-                        condition_unmodulated = []
-
-                        if direction == 'CW':
-                            for i in range(NtotClust):
-                                condition_positive.append((AllWho[i] == 'CW' or AllWho[i] == 'both') and (AllHow[i] == '+' or AllHow[i] == '+/+' or AllHow[i] == '+/-'))
-                                condition_negative.append((AllWho[i] == 'CW' or AllWho[i] == 'both') and (AllHow[i] == '-' or AllHow[i] == '-/+' or AllHow[i] == '-/-'))
-                                condition_unmodulated.append(AllWho[i] == 'unmodulated' or AllWho[i] == 'CCW')
-                        elif direction == 'CCW':
-                            for i in range(NtotClust):
-                                condition_positive.append((AllWho[i] == 'CCW' or AllWho[i] == 'both') and (AllHow[i] == '+' or AllHow[i] == '+/+' or AllHow[i] == '-/+'))
-                                condition_negative.append((AllWho[i] == 'CCW' or AllWho[i] == 'both') and (AllHow[i] == '-' or AllHow[i] == '+/-' or AllHow[i] == '-/-'))
-                                condition_unmodulated.append(AllWho[i] == 'unmodulated' or AllWho[i] == 'CW')
-
-
-                        positionSigni_P = [position[i] for i in range(NtotClust) if condition_positive[i]]
-                        depthSigni_P = [AllDepth[i] for i in range(NtotClust) if condition_positive[i]]
-                        vMISigni_P = [vMI[i] for i in range(NtotClust) if condition_positive[i]]
-
-                        positionSigni_N = [position[i] for i in range(NtotClust) if condition_negative[i]]
-                        depthSigni_N = [AllDepth[i] for i in range(NtotClust) if condition_negative[i]]
-                        vMISigni_N = [vMI[i] for i in range(NtotClust) if condition_negative[i]]
-
-                        positionNot = [position[i] for i in range(NtotClust) if condition_unmodulated[i]]
-                        depthNot = [AllDepth[i] for i in range(NtotClust) if condition_unmodulated[i]]
-                        vMINot = [vMI[i] for i in range(NtotClust) if condition_unmodulated[i]]
-                        
-
-                        histdata1, bins1 = np.histogram(positionSigni_P, bins=30)
+                        histdata1, bins1 = np.histogram(positionSigni_P, bins=binsNumber)
                         histdataDist1 = histdata1 / NtotClust
-                        histdata2, bins2 = np.histogram(positionSigni_N, bins=30)
+                        histdata2, bins2 = np.histogram(positionSigni_N, bins=binsNumber)
                         histdataDist2 = histdata2 / NtotClust
                         ax3.plot(bins1[:-1], histdataDist1, color='red')
                         ax3.plot(bins2[:-1], histdataDist2, color='blue')
 
-                        histdata1, bins1 = np.histogram(depthSigni_P, bins=30)
+                        histdata1, bins1 = np.histogram(depthSigni_P, bins=binsNumber)
                         histdataDist1 = histdata1 / NtotClust
-                        histdata2, bins2 = np.histogram(depthSigni_N, bins=30)
+                        histdata2, bins2 = np.histogram(depthSigni_N, bins=binsNumber)
                         histdataDist2 = histdata2 / NtotClust
                         ax2.plot(histdataDist1, bins1[:-1], color='red')
                         ax2.plot(histdataDist2, bins2[:-1], color='blue')
 
+                        modulation_label = ['Excited units', 'Suppressed units', 'Non-significant modulation']
+                        modulation_quantity = [len(positionSigni_P), len(positionSigni_N), len(positionNot)]
+                        ax4.bar(modulation_label, modulation_quantity, color=['red', 'blue', 'grey'], alpha=0.6)
 
-                        ax.scatter(positionSigni_P, depthSigni_P, s=s, alpha=alpha, color='red', label='Significant positive modulation')
-                        ax.scatter(positionSigni_N, depthSigni_N, s=s, alpha=alpha, color='blue', label='Significant negative modulation')
-                        ax.scatter(positionNot, depthNot, s=s, alpha=alpha/3, color='grey', label='Non-significant modulation')
-                        ax.legend()
-                        
-                    if not hist and not stats:
-                        plt.scatter(position, AllDepth, c=vMI, cmap='coolwarm', s=s, alpha=alpha, clim=(minimum_value, maximum_value))
+
+                        ax=ax1
+                    else:
+                        ax=plt
+                    ax.scatter(positionSigni_P, depthSigni_P, s=s, alpha=alpha, color='red', label='Excited units')
+                    ax.scatter(positionSigni_N, depthSigni_N, s=s, alpha=alpha, color='blue', label='Suppressed units')
+                    ax.scatter(positionNot, depthNot, s=s, alpha=alpha/3, color='grey', label='Non-significant modulation')
+                    ax.legend()
+                    
+                if not hist and not stats:
+                    plt.scatter(position, AllDepth, c=vMI, cmap='coolwarm', s=s, alpha=alpha, clim=(minimum_value, maximum_value))
                 
                 plt.colorbar(label=f"{direction} modulation index"+r" : $\frac{n_{during} - n_{before}}{n_{during} + n_{before}}$") if ((not hist) and (not stats)) else None
 
@@ -347,13 +344,15 @@ def vMI_function(AllData, analyse_path, filename='', save=False, show=True, s=10
                 plt.suptitle(f"{direction} modulation of units in {pos_title} axis", fontsize=16)
                 
                 if save:
-                    direction_modulation_folder = os.path.join(analyse_path, 'Direction_modulation')
-                    os.makedirs(direction_modulation_folder, exist_ok=True)
-                    if hist:
-                        plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}_hist.png")) if filename=='' else plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}_{filename}.png"))
+                    if path=='':
+                        KeyError('You must specify a path to save the figure')
                     else:
-                        plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}.png")) if filename=='' else plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}_{filename}.png"))
-
+                        os.makedirs(path, exist_ok=True)
+                        if filename:
+                            plt.savefig(os.path.join(path , f"{direction}_modulation_{pos_title}_{filename}.png"))
+                        else:
+                            plt.savefig(os.path.join(path , f"{direction}_modulation_{pos_title}.png"))
+                    
 
                 plt.show() if show else plt.close()
 
@@ -383,54 +382,227 @@ def vMI_function(AllData, analyse_path, filename='', save=False, show=True, s=10
 
 
 
-# dirMI FUNCTION
 
-def dirMI_function(AllData, analyse_path, save = False,s=35,alpha=0.6, show=True, scale=0.008, AP=True, ML=True):
-    foo=[]
-    foo2=[]
+
+def dirMI_function(AllData, path='', filename='', save=False, show=True, s=100,alpha=0.6, scale=0.008, ML=True, AP=True, stats=False, hist=False, interest=None, color='c', binsNumber=30, All=False):
+    stereotaxic_title=[]
+    stereotaxic_label=[]
 
     if ML:
-        foo.append('Mediolateral')
-        foo2.append('ML_pos')
+        stereotaxic_title.append('Mediolateral')
+        stereotaxic_label.append('ML_pos')
     if AP:
-        foo.append('Anteroposterior')
-        foo2.append('AP_pos')
-    for pos_title, posOrientation in zip(foo, foo2):
+        stereotaxic_title.append('Anteroposterior')
+        stereotaxic_label.append('AP_pos')
+
+
+    for pos_title, posOrientation in zip(stereotaxic_title, stereotaxic_label):
         for condition in ['second']:
 
-            with load_theme("arctic_light"):
-                plt.figure(figsize=(17, 5))
+            NtotClust = np.sum([AllData[animal]['SUA_data']['Nclust'] for animal in AllData])
+            AllDepth = np.concatenate([AllData[animal]['MUA_data']['AllDepth'] for animal in AllData])
+            dirMI = np.concatenate([AllData[animal]['Statistics_data']['dirMI'][condition] for animal in AllData])
+            pos = [AllData[animal]['informative_data'][posOrientation] for animal in AllData]
+            position = np.concatenate([np.random.normal(loc=pos[i], scale=scale, size=(AllData[animal]['SUA_data']['Nclust'], 1)) for animal, i in zip(AllData, range(len(pos)))])
 
-                for animal in AllData:
-                    pos = AllData[animal]['informative_data'][posOrientation]
-                    Nclust = AllData[animal]['SUA_data']['Nclust']
-                    AllDepth = AllData[animal]['MUA_data']['AllDepth']
-                    dirMI = AllData[animal]['Statistics_data']['dirMI']
 
-                    plt.scatter(np.random.normal(loc=pos, scale=scale, size=(Nclust, 1)), AllDepth, c=dirMI[condition], cmap='coolwarm', s=s, alpha=alpha)
-                    # plt.scatter((pos+random.uniform(-0.005,0.005))*np.ones(Nclust), AllDepth, c=dirMI[condition], cmap='coolwarm', s=s, alpha=alpha)
+            maximum_value = max([max(AllData[animal]['Statistics_data']['dirMI'][condition]) for animal in AllData])
+            minimum_value = min([min(AllData[animal]['Statistics_data']['dirMI'][condition]) for animal in AllData])
+            nul_value = min([min(AllData[animal]['Statistics_data']['dirMI'][condition], key=lambda x: abs(x)) for animal in AllData])
 
-                plt.gca().invert_yaxis()
-                if posOrientation == 'ML_pos':
-                    plt.gca().invert_xaxis()
 
-                plt.xlabel(f"{pos_title} position (mm)", fontsize=14)
-                plt.ylabel("Depth (µm)", fontsize=14)
-                plt.title(f"CW vs CCW preference in {pos_title} axis", fontsize=16)
+            fig = plt.figure(figsize=(17, 9))
 
-            plt.colorbar(label=r"Direction Modulation Index : $\frac{CW - CCW}{CW + CCW}$")
-
+            # mettre en évidence les neurones d'intérêt
+            if interest!=None:
+                wanted_array = []
+                for value in interest:
+                    if value == 'max':
+                        wanted_array.append(maximum_value)
+                    elif value == 'min':
+                        wanted_array.append(minimum_value)
+                    elif value == 'nul':
+                        wanted_array.append(nul_value)
+                    else:
+                        wanted_array.append(value)
 
                 
+
+
+            if hist:
+                gs = GridSpec(nrows=4, ncols=4)
+                ax1 = fig.add_subplot(gs[1:4,0:3]) ; # scatter plot on the left
+                ax2 = fig.add_subplot(gs[1:4,3], sharey=ax1) ; ax2.set_xlabel('Density') # histogram on the right
+                ax3 = fig.add_subplot(gs[0,0:3], sharex=ax1) ; ax3.set_ylabel('Density') # histogram on the top
+                # ax4 = fig.add_subplot(gs[0,3]) ; ax4.set_axis_off()# for legend
+                
+
+                ax2.spines['top'].set_visible(False) ; ax3.spines['top'].set_visible(False)
+                ax2.spines['right'].set_visible(False) ; ax3.spines['right'].set_visible(False)
+                ax2.spines['bottom'].set_visible(True) ; ax3.spines['bottom'].set_visible(False)
+                ax2.spines['left'].set_visible(False) ; ax3.spines['left'].set_visible(True)
+                ax2.tick_params(axis='both', which='both', bottom=True, top=False, left=False, right=False, labelleft=False, labelbottom=True)
+                ax3.tick_params(axis='both', which='both', bottom=False, top=False, left=True, right=False, labelleft=True, labelbottom=False)
+
+                if not stats:
+                    histdata, bins = np.histogram(position, bins=binsNumber)
+                    histdataDist = histdata / NtotClust
+                    ax3.plot(bins[:-1], histdataDist, color=color)
+
+                    histdata, bins = np.histogram(AllDepth, bins=binsNumber)
+                    histdataDist = histdata / NtotClust
+                    ax2.plot(histdataDist, bins[:-1], color=color)
+
+                    ax1.scatter(position, AllDepth, s=s, alpha=alpha, color=color)
+
+
+            # mettre en évidence les neurones d'intérêt
+            if interest!=None:
+                for value in wanted_array:
+                    ax = ax1 if hist else plt
+                    if type(value) == list:
+                        values_of_interest = [dirMI_value for dirMI_value in dirMI if value[0] <= dirMI_value <= value[1]]
+                        for value in values_of_interest:
+                            unit_index = np.where(dirMI == value)[0]
+                            ax.scatter(position[unit_index], AllDepth[unit_index], marker='s', s=s*4, edgecolors='black', facecolors='none', linewidths=2) if len(unit_index) > 0 else None
+                    else:
+                        unit_index = np.where(dirMI == value)[0]
+                        if len(unit_index) > 0:
+                            ax.scatter(position[unit_index], AllDepth[unit_index], marker='s', s=s*4, edgecolors='black', facecolors='none', linewidths=2)
+
+
+
+
+            if stats:                     
+                AllPreferences = np.concatenate([[AllData[animal]['Statistics_data']['preference']['second'][unit] for unit in range(AllData[animal]['SUA_data']['Nclust'])] for animal in AllData])
+
+                CW_preferrers_bool = AllPreferences == 'CW'
+                CCW_preferrers_bool = AllPreferences == 'CCW'
+                Non_preferrers_bool = AllPreferences == 'None'
+
+                
+                positionCW = [position[i] for i in range(NtotClust) if CW_preferrers_bool[i]]
+                depthCW = [AllDepth[i] for i in range(NtotClust) if CW_preferrers_bool[i]]
+                dirMICW = [dirMI[i] for i in range(NtotClust) if CW_preferrers_bool[i]]
+
+                positionCCW = [position[i] for i in range(NtotClust) if CCW_preferrers_bool[i]]
+                depthCCW = [AllDepth[i] for i in range(NtotClust) if CCW_preferrers_bool[i]]
+                dirMICCW = [dirMI[i] for i in range(NtotClust) if CCW_preferrers_bool[i]]
+
+                positionNone = [position[i] for i in range(NtotClust) if Non_preferrers_bool[i]]
+                depthNone = [AllDepth[i] for i in range(NtotClust) if Non_preferrers_bool[i]]
+                dirMINone = [dirMI[i] for i in range(NtotClust) if Non_preferrers_bool[i]]
+                
+                if hist:
+                    ax2.spines['top'].set_visible(False) ; ax3.spines['top'].set_visible(False)
+                    ax2.spines['right'].set_visible(False) ; ax3.spines['right'].set_visible(False)
+                    ax2.spines['bottom'].set_visible(True) ; ax3.spines['bottom'].set_visible(False)
+                    ax2.spines['left'].set_visible(False) ; ax3.spines['left'].set_visible(True)
+                    ax2.tick_params(axis='both', which='both', bottom=True, top=False, left=False, right=False, labelleft=False, labelbottom=True)
+                    ax3.tick_params(axis='both', which='both', bottom=False, top=False, left=True, right=False, labelleft=True, labelbottom=False)
+
+                    histdata1, bins1 = np.histogram(positionCW, bins=binsNumber)
+                    histdataDist1 = histdata1 / NtotClust
+                    histdata2, bins2 = np.histogram(positionCCW, bins=binsNumber)
+                    histdataDist2 = histdata2 / NtotClust
+                    ax3.plot(bins1[:-1], histdataDist1, color='red')
+                    ax3.plot(bins2[:-1], histdataDist2, color='blue')
+
+                    if All:
+                        histdata3, bins3 = np.histogram(positionNone, bins=binsNumber)
+                        histdataDist3 = histdata3 / NtotClust
+                        ax3.plot(bins3[:-1], histdataDist3, color='grey', alpha=0.6)
+
+                    histdata1, bins1 = np.histogram(depthCW, bins=binsNumber)
+                    histdataDist1 = histdata1 / NtotClust
+                    histdata2, bins2 = np.histogram(depthCCW, bins=binsNumber)
+                    histdataDist2 = histdata2 / NtotClust
+                    ax2.plot(histdataDist1, bins1[:-1], color='red')
+                    ax2.plot(histdataDist2, bins2[:-1], color='blue')
+
+                    if All:
+                        histdata3, bins3 = np.histogram(depthNone, bins=binsNumber)
+                        histdataDist3 = histdata3 / NtotClust
+                        ax2.plot(histdataDist3, bins3[:-1], color='grey', alpha=0.6)
+
+                    ax=ax1
+                else:
+                    ax=plt
+                ax.scatter(positionCW, depthCW, s=s, alpha=alpha, color='red', label='CW-preferring units')
+                ax.scatter(positionCCW, depthCCW, s=s, alpha=alpha, color='blue', label='CCW-preferring units')
+                ax.scatter(positionNone, depthNone, s=s, alpha=alpha/3, color='grey', label='No directional preference')
+                ax.legend()
+                
+            if not hist and not stats:
+                plt.scatter(position, AllDepth, c=dirMI, cmap='coolwarm', s=s, alpha=alpha, clim=(minimum_value, maximum_value))
+            
+            plt.colorbar(label=r"Direction Modulation Index : $\frac{CW - CCW}{CW + CCW}$") if ((not hist) and (not stats)) else None
+
+            plt.gca().invert_yaxis() if not hist else ax1.invert_yaxis()
+            (plt.gca().invert_xaxis() if posOrientation == 'ML_pos' else None) if not hist else (ax1.invert_xaxis() if posOrientation == 'ML_pos' else None)
+
+            xlabel = f"{pos_title} position (mm)" ; plt.xlabel(xlabel, fontsize=14) if not hist else ax1.set_xlabel(xlabel)
+            ylabel = r"Depth ($\mu$m)" ; plt.ylabel(ylabel, fontsize=14) if not hist else ax1.set_ylabel(ylabel)
+            plt.suptitle(f"CW vs CCW preference in {pos_title} axis", fontsize=16)
+            
+
             if save:
-                direction_preference_folder = os.path.join(analyse_path, 'Direction_preference')
-                os.makedirs(direction_preference_folder, exist_ok=True)
-                plt.savefig(os.path.join(direction_preference_folder , f"Direction_preference_{pos_title}.png"))
-            if show:
-                plt.show()
-            else:
-                plt.close()
-            print('\n')
+                if path=='':
+                    KeyError('You must specify a path to save the figure')
+                else:
+                    os.makedirs(path, exist_ok=True)
+                    if filename:
+                        plt.savefig(os.path.join(path , f"Direction_preference_{pos_title}_{filename}.png"))
+                    else:
+                        plt.savefig(os.path.join(path , f"Direction_preference_{pos_title}.png"))
+
+
+            plt.show() if show else plt.close()
+
+            foo=dict()
+            for animal in AllData:
+                foo[animal] = AllData[animal]['informative_data'][posOrientation]
+            sorted_keys = [key for key, value in sorted(foo.items(), key=itemgetter(1))] 
+
+            myTable = PrettyTable(["Animal", pos_title]) 
+
+            for animal in sorted_keys:
+                myTable.add_row([animal, foo[animal]])
+
+            print(myTable)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -542,46 +714,44 @@ def select_folders(selected_path):
 
 def scatter3D(x,y,z,colors,colorlabel,xlabel,ylabel,zlabel,title,filename,filepath,save=True,show=True,anim=True,s=35,alpha=1):
 
-    theme = load_theme("arctic_light").set_overrides({
-        "ytick.minor.visible": False,
-        "xtick.minor.visible": False,
-    })
+    # theme = load_theme("arctic_light").set_overrides({
+    #     "ytick.minor.visible": False,
+    #     "xtick.minor.visible": False,
+    # })
 
-    with theme:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
+    # with theme:
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
 
-        scatter = ax.scatter(x, y, z, c=colors, cmap='coolwarm', marker='o', s=s, alpha=alpha)
+    scatter = ax.scatter(x, y, z, c=colors, cmap='coolwarm', marker='o', s=s, alpha=alpha)
 
-        cbar = plt.colorbar(scatter, pad=0.2)
-        cbar.set_label(colorlabel)
-
-
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
-        ax.set_zlabel(zlabel)
-        ax.invert_zaxis()
-
-        plt.title(title)
-
-        if anim:
-            def update(frame):
-                ax.view_init(30, frame)
-                return scatter,
-
-            ani = FuncAnimation(fig, update, frames=np.arange(0, 360, 2), interval=100)
-
-        if save & anim:
-            os.makedirs(filepath, exist_ok=True)
-            ani.save(os.path.join(filepath, filename), writer='pillow')
-        elif save:
-            os.makedirs(filepath, exist_ok=True)
-            plt.savefig(os.path.join(filepath, filename), format='pdf')
-        if show:
-            plt.show()
+    cbar = plt.colorbar(scatter, pad=0.2)
+    cbar.set_label(colorlabel)
 
 
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_zlabel(zlabel)
+    ax.invert_zaxis()
 
+    plt.title(title)
+
+    if anim:
+        def update(frame):
+            ax.view_init(30, frame)
+            return scatter,
+
+        ani = FuncAnimation(fig, update, frames=np.arange(0, 360, 2), interval=100)
+
+    if save and anim:
+        os.makedirs(filepath, exist_ok=True)
+        ani.save(os.path.join(filepath, filename), writer='pillow')
+    elif save:
+        os.makedirs(filepath, exist_ok=True)
+        plt.savefig(os.path.join(filepath, filename), format='pdf')
+
+    if show:
+        plt.show()
 
 
 
@@ -592,7 +762,10 @@ def scatter3D(x,y,z,colors,colorlabel,xlabel,ylabel,zlabel,title,filename,filepa
 
 
 
-def getPSTH(Zscore, SEM, edges, ax='', xlabel='', ylabel='', title=''):
+
+
+
+def getPSTH(Zscore, SEM, edges, ax='', xlabel='', ylabel='', title='', show=True):
     if ax:
         ax.plot(edges[:-1], Zscore)
         ax.fill_between(edges[:-1], Zscore-SEM, Zscore+SEM, alpha=0.5)
@@ -600,16 +773,16 @@ def getPSTH(Zscore, SEM, edges, ax='', xlabel='', ylabel='', title=''):
         ax.set_ylabel(ylabel)
         ax.set_title(title)
     else:
-        with load_theme("arctic_light"):
-            plt.plot(edges[:-1], Zscore)
-            plt.fill_between(edges[:-1], Zscore-SEM, Zscore+SEM, alpha=0.5)
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(title)
+        # with load_theme("arctic_light"):
+        plt.plot(edges[:-1], Zscore)
+        plt.fill_between(edges[:-1], Zscore-SEM, Zscore+SEM, alpha=0.5)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.title(title)
 
-        plt.show()
+        plt.show() if show else None
 
-def PSTH(StudiedSpikeTimes, timeBef=1, timeAft=5, binResolution=0.03, xlabel='', ylabel='', title='', ax=''):
+def PSTH(StudiedSpikeTimes, timeBef=1, timeAft=5, binResolution=0.03, xlabel='', ylabel='', title='', ax='', show=True):
     local_trial_number = len(StudiedSpikeTimes)
 
     spike_number_per_trial = [[] for _ in range(local_trial_number)]
@@ -626,7 +799,7 @@ def PSTH(StudiedSpikeTimes, timeBef=1, timeAft=5, binResolution=0.03, xlabel='',
     Zunitary = (frequency_per_trial - np.mean(mean_frequency)) / np.std(mean_frequency) if np.std(mean_frequency) != 0 else np.zeros(len(frequency_per_trial))
     SEM = np.std(Zunitary)/np.sqrt(len(Zunitary)) if np.std(mean_frequency) != 0 else np.zeros(len(mean_frequency))
 
-    getPSTH(Zscore, SEM, edges, xlabel=xlabel, ylabel=ylabel, title=title, ax=ax)
+    getPSTH(Zscore, SEM, edges, xlabel=xlabel, ylabel=ylabel, title=title, ax=ax, show=show)
 
 
 
