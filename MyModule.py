@@ -4,6 +4,7 @@ import h5py
 import numpy as np
 from scipy.signal import find_peaks, savgol_filter
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 # from scipy.stats import sem
 from scipy.stats import wilcoxon
 import pandas as pd
@@ -11,6 +12,8 @@ import json
 import jdata as jd
 import re
 import pickle
+import math
+import time
 
 from nbconvert.preprocessors import ExecutePreprocessor
 from nbconvert import NotebookExporter
@@ -26,20 +29,24 @@ from matplotlib.colors import LinearSegmentedColormap, ListedColormap, BoundaryN
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
 from matplotlib.animation import FuncAnimation
+import matplotlib.image as mpimg
 
 from matplotlib.gridspec import GridSpec
 from PIL import Image
 
-from aquarel import load_theme
+# from aquarel import load_theme
 
 from operator import itemgetter
 
 from prettytable import PrettyTable 
 
+import tkinter as tk
+from tkinter import filedialog
 
-# qt for popup window (savable as pdf, svg...), inline for inline plot, notebook for interactive plot, widget for interactive plot
-#%matplotlib widget 
-#plt.ioff()
+
+# # qt for popup window (savable as pdf, svg...), inline for inline plot, notebook for interactive plot, widget for interactive plot
+# %matplotlib widget 
+# plt.ioff()
 
 
 
@@ -81,8 +88,7 @@ def split_path(path):
 
 # GENERAL BROWSER FUNCTION
 
-import tkinter as tk
-from tkinter import filedialog
+
 
 def browse(type,extra,multiple=False, initialdir=None):
     if type == 'file':
