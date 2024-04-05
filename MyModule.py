@@ -1,5 +1,9 @@
 import scipy.io
 import os
+import subprocess
+import sys
+from IPython.display import display, FileLink
+import warnings
 import h5py
 import numpy as np
 from scipy.signal import find_peaks, savgol_filter
@@ -42,6 +46,7 @@ from prettytable import PrettyTable
 
 import tkinter as tk
 from tkinter import filedialog
+from tkinter import ttk
 
 
 # # qt for popup window (savable as pdf, svg...), inline for inline plot, notebook for interactive plot, widget for interactive plot
@@ -124,40 +129,40 @@ def browse(type,extra,multiple=False, initialdir=None):
 
 # MULTI ANIMAL FUNCTION
 
-def MultiAnimal_function(selected_folders, analyse_path, analysis_script):
-    # Nombre total de dossiers à analyser
-    total_folders = len(selected_folders)
+# def MultiAnimal_function(selected_folders, saving_path, analysis_script):
+#     # Nombre total de dossiers à analyser
+#     total_folders = len(selected_folders)
 
-    # tqdm pour afficher une barre de progression
-    for i, selected_path in enumerate(tqdm(selected_folders, desc="Analyzing folders", unit="folder")):
+#     # tqdm pour afficher une barre de progression
+#     for i, selected_path in enumerate(tqdm(selected_folders, desc="Analyzing folders", unit="folder")):
 
-        exp_id = "_".join([element for element in split_path(selected_path) if 'animal' in element][0].split('_')[0:2])
+#         exp_id = "_".join([element for element in split_path(selected_path) if 'animal' in element][0].split('_')[0:2])
 
-        executed_notebook = analysis_script
-        result_notebook = os.path.join(analyse_path, f"Analysis_{exp_id}.ipynb")  
+#         executed_notebook = analysis_script
+#         result_notebook = os.path.join(saving_path, f"Analysis_{exp_id}.ipynb")  
 
-        jd.save(selected_path, os.path.join(analyse_path, 'path.json'))
+#         jd.save(selected_path, os.path.join(saving_path, 'path.json'))
 
-        # Charger le notebook à exécuter
-        with open(executed_notebook, 'r', encoding='utf-8') as f:
-            notebook = nbformat.read(f, as_version=4)
+#         # Charger le notebook à exécuter
+#         with open(executed_notebook, 'r', encoding='utf-8') as f:
+#             notebook = nbformat.read(f, as_version=4)
 
-        # Créer un préprocesseur pour exécuter le notebook
-        preprocessor = ExecutePreprocessor(timeout=None)
+#         # Créer un préprocesseur pour exécuter le notebook
+#         preprocessor = ExecutePreprocessor(timeout=None)
 
-        # Exécuter le notebook
-        preprocessor.preprocess(notebook)
+#         # Exécuter le notebook
+#         preprocessor.preprocess(notebook)
 
-        # Exporter le notebook exécuté
-        exporter = NotebookExporter()
-        body, resources = exporter.from_notebook_node(notebook)
+#         # Exporter le notebook exécuté
+#         exporter = NotebookExporter()
+#         body, resources = exporter.from_notebook_node(notebook)
 
-        # Écrire le notebook exécuté dans un fichier
-        with open(result_notebook, 'w', encoding='utf-8') as f:
-            f.write(body)
+#         # Écrire le notebook exécuté dans un fichier
+#         with open(result_notebook, 'w', encoding='utf-8') as f:
+#             f.write(body)
 
-        os.makedirs(os.path.join(analyse_path, 'Path'), exist_ok=True)
-        shutil.move(os.path.join(analyse_path, 'path.json'), os.path.join(analyse_path, 'Path', f"{exp_id}.json"))
+#         os.makedirs(os.path.join(saving_path, 'Path'), exist_ok=True)
+#         shutil.move(os.path.join(saving_path, 'path.json'), os.path.join(saving_path, 'Path', f"{exp_id}.json"))
 
 
 
@@ -627,10 +632,10 @@ def dirMI_function(AllData, path='', filename='', save=False, show=True, s=100,a
 
 # LOAD FUNCTION
 
-def load(analyse_path, all):
+def load(saving_path, all):
     AllData = {}
 
-    data_folder = os.path.join(analyse_path, 'Data')
+    data_folder = os.path.join(saving_path, 'Data')
     
 
 
@@ -928,7 +933,7 @@ def PSTH(StudiedSpikeTimes, timeBef=1, timeAft=5, binResolution=0.03, xlabel='',
 
 
 
-# def vMI_function(AllData, analyse_path, save = False,s=100,alpha=0.6, show=True, scale=0.008, ML=True, AP=True, CW=True, CCW=True, seuil_min=None, seuil_max=None, outcolor='green', outshow=True, outscoeff=0.1, incolor=None, colormap=True, interest=None, hist=False):
+# def vMI_function(AllData, saving_path, save = False,s=100,alpha=0.6, show=True, scale=0.008, ML=True, AP=True, CW=True, CCW=True, seuil_min=None, seuil_max=None, outcolor='green', outshow=True, outscoeff=0.1, incolor=None, colormap=True, interest=None, hist=False):
 #     stereotaxic_title=[]
 #     stereotaxic_label=[]
 #     direction_selected=[]
@@ -1119,7 +1124,7 @@ def PSTH(StudiedSpikeTimes, timeBef=1, timeAft=5, binResolution=0.03, xlabel='',
                 
 
 #                 if save:
-#                     direction_modulation_folder = os.path.join(analyse_path, 'Direction_modulation')
+#                     direction_modulation_folder = os.path.join(saving_path, 'Direction_modulation')
 #                     os.makedirs(direction_modulation_folder, exist_ok=True)
 #                     if hist:
 #                         plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}_hist.png"))
@@ -1174,7 +1179,7 @@ def PSTH(StudiedSpikeTimes, timeBef=1, timeAft=5, binResolution=0.03, xlabel='',
 
 
 
-# def vMI_function(AllData, analyse_path, save = False,s=35,alpha=0.6, show=True, scale=0.008, ML=True, AP=True, CW=True, CCW=True, seuil=None):
+# def vMI_function(AllData, saving_path, save = False,s=35,alpha=0.6, show=True, scale=0.008, ML=True, AP=True, CW=True, CCW=True, seuil=None):
 #     foo=[]
 #     foo2=[]
 #     foo3=[]
@@ -1223,7 +1228,7 @@ def PSTH(StudiedSpikeTimes, timeBef=1, timeAft=5, binResolution=0.03, xlabel='',
 #                 plt.colorbar(label=f"{direction} modulation index")
 
 #                 if save:
-#                     direction_modulation_folder = os.path.join(analyse_path, 'Direction_modulation')
+#                     direction_modulation_folder = os.path.join(saving_path, 'Direction_modulation')
 #                     os.makedirs(direction_modulation_folder, exist_ok=True)
 #                     plt.savefig(os.path.join(direction_modulation_folder , f"{direction}_modulation_{pos_title}.png"))
 #                 if show:
